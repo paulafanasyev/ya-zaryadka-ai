@@ -1,0 +1,67 @@
+name: Fix map readability
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fix index
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          p = Path('index.html')
+          s = p.read_text(encoding='utf-8')
+
+          # Remove the fourth feature card: "Мир природы".
+          s, n = re.subn(
+              r'<article class="card reveal"><div class="icon pink">🌸</div><h3>Мир природы</h3><p>.*?</p></article>',
+              '', s, count=1, flags=re.S
+          )
+
+          # Put map artwork strictly above a separate, opaque text area.
+          css = '''
+          /* MAP TEXT READABILITY FIX */
+          .map-stop{justify-content:flex-start;min-height:325px;padding:188px 20px 20px;background:#fff;isolation:isolate}
+          .map-scene{z-index:1;height:165px}
+          .map-stop .map-number,.map-stop .map-sparkles{z-index:6}
+          .map-stop h3,.map-stop p,.map-stop .map-go{z-index:7}
+          .map-stop h3{color:#19372d;background:#fff;margin:0 0 7px;padding:0;line-height:1.2;text-shadow:none}
+          .map-stop p{color:#3f5f52;background:#fff;margin:0;line-height:1.45;text-shadow:none}
+          .map-stop .map-go{background:#27b66b;color:#fff;margin-top:13px}
+          @media(max-width:900px){.map-stop{min-height:325px;padding-top:188px}}
+          @media(max-width:560px){.map-stop,.map-stop:nth-child(2),.map-stop:nth-child(3){min-height:300px;padding:164px 18px 18px}.map-scene{height:145px}.map-stop h3{font-size:21px;line-height:1.2}.map-stop p{font-size:14px;line-height:1.4}.map-stop .map-go{margin-top:11px}}
+          '''
+          if '/* MAP TEXT READABILITY FIX */' not in s:
+              s = s.replace('</style>', css + '\n</style>', 1)
+
+          p.write_text(s, encoding='utf-8')
+          print('Removed nature card:', n)
+          print('Map readability fix present:', '/* MAP TEXT READABILITY FIX */' in s)
+          PY
+
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html
+          git commit -m "Fix map text readability and remove nature card" || exit 0
+          git push
+
+      - name: Remove one-shot workflow
+        if: success()
+        shell: bash
+        run: |
+          rm -f .github/workflows/site-map-fix.yml
+          git add .github/workflows/site-map-fix.yml
+          git commit -m "Remove one-shot map fix workflow" || exit 0
+          git push
