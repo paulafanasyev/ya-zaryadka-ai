@@ -1,0 +1,36 @@
+name: Fix map text visibility
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch map text layering
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('index.html')
+          s = p.read_text(encoding='utf-8')
+          marker = '/* map-text-visibility-fix */'
+          if marker in s:
+              raise SystemExit(0)
+          css = '''\n/* map-text-visibility-fix */\n.map-stop .map-scene{z-index:1;pointer-events:none}\n.map-stop .map-number,.map-stop .map-sparkles{z-index:7}\n.map-stop h3,.map-stop p,.map-stop .map-go{position:relative;z-index:8}\n.map-stop h3{display:block;width:max-content;max-width:100%;padding:5px 9px;margin-bottom:6px;border-radius:10px;background:rgba(255,255,255,.96);color:var(--ink);text-shadow:none}\n.map-stop p{padding:7px 9px;border-radius:10px;background:rgba(255,255,255,.94);color:#49695e;box-shadow:0 5px 14px rgba(31,105,73,.08)}\n.map-stop .map-go{box-shadow:0 7px 16px rgba(39,182,107,.22)}\n@media(max-width:560px){.map-stop h3{font-size:20px;padding:4px 8px}.map-stop p{font-size:14px;padding:6px 8px}}\n'''
+          s = s.replace('</style>', css + '</style>', 1)
+          p.write_text(s, encoding='utf-8')
+          PY
+      - name: Commit fix
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html
+          git diff --cached --quiet && exit 0
+          git commit -m 'fix: improve map text readability'
+          git push
