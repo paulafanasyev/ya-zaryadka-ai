@@ -42,6 +42,12 @@
     .btn-primary{background:var(--green);color:#fff;box-shadow:0 12px 26px rgba(39,182,107,.25)}
     .btn-secondary{background:#fff;color:var(--ink);box-shadow:0 10px 24px rgba(31,105,73,.1)}
     .btn-large{padding:20px 32px;font-size:18px;border-radius:22px}
+    
+    /* Touch feedback for mobile */
+    .touch-active {
+        transform: scale(0.95) !important;
+        opacity: 0.9;
+    }
     .trust{display:flex;gap:18px;align-items:center;margin-top:25px;font-size:13px;font-weight:700;color:#5c7b70;flex-wrap:wrap}
     .trust span{display:flex;align-items:center;gap:6px}
     
@@ -556,16 +562,70 @@
 </footer>
 
 <script>
-  // Reveal on scroll animation
+  // Reveal on scroll animation (works on mobile too!)
   const io = new IntersectionObserver(entries => {
     entries.forEach(entry => {
       if (entry.isIntersecting) {
         entry.target.classList.add('visible');
+        io.unobserve(entry.target); // Stop observing after reveal for performance
       }
     });
   }, { threshold: 0.12 });
   
   document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+
+  // Mobile touch animations - add ripple effect on buttons
+  document.querySelectorAll('.btn, .exercise-card, .feature-card').forEach(btn => {
+    btn.addEventListener('touchstart', function(e) {
+      // Add active class for visual feedback
+      this.classList.add('touch-active');
+      setTimeout(() => this.classList.remove('touch-active'), 300);
+    });
+  });
+
+  // Device orientation parallax for mobile (clouds move with phone tilt)
+  if (window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === 'function') {
+    // iOS 13+ requires permission
+    const orientationBtn = document.createElement('button');
+    orientationBtn.textContent = '🎮 Включить анимацию';
+    orientationBtn.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:9999;padding:15px 30px;background:#FF6B6B;color:white;border:none;border-radius:50px;font-size:16px;font-weight:bold;box-shadow:0 4px 15px rgba(255,107,107,0.4);cursor:pointer;';
+    
+    orientationBtn.addEventListener('click', async () => {
+      try {
+        const permission = await DeviceOrientationEvent.requestPermission();
+        if (permission === 'granted') {
+          enableParallax();
+          orientationBtn.remove();
+        }
+      } catch (e) {
+        console.log('Orientation permission denied');
+        orientationBtn.remove();
+      }
+    });
+    
+    // Show button only on iOS devices
+    if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
+      document.body.appendChild(orientationBtn);
+    }
+  } else if ('DeviceOrientationEvent' in window) {
+    // Android and older iOS
+    enableParallax();
+  }
+
+  function enableParallax() {
+    window.addEventListener('deviceorientation', (e) => {
+      const clouds = document.querySelectorAll('.cloud');
+      const tiltX = e.gamma || 0; // -90 to 90
+      const tiltY = e.beta || 0; // -180 to 180
+      
+      clouds.forEach((cloud, index) => {
+        const speed = (index + 1) * 0.5;
+        const xOffset = tiltX * speed;
+        const yOffset = tiltY * speed * 0.3;
+        cloud.style.transform = `translate(${xOffset}px, ${yOffset}px)`;
+      });
+    });
+  }
 
   // Mini games interaction
   function playMiniGame(gameType) {
