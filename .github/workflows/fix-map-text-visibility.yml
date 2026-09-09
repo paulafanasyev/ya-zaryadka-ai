@@ -1,4 +1,4 @@
-name: Fix map text visibility
+name: Header alignment
 
 on:
   push:
@@ -13,24 +13,39 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Patch map text layering
+      - name: Normalize header
         run: |
           python3 - <<'PY'
           from pathlib import Path
           p = Path('index.html')
           s = p.read_text(encoding='utf-8')
-          marker = '/* map-text-visibility-fix */'
+          marker = '/* header-alignment */'
           if marker in s:
               raise SystemExit(0)
-          css = '''\n/* map-text-visibility-fix */\n.map-stop .map-scene{z-index:1;pointer-events:none}\n.map-stop .map-number,.map-stop .map-sparkles{z-index:7}\n.map-stop h3,.map-stop p,.map-stop .map-go{position:relative;z-index:8}\n.map-stop h3{display:block;width:max-content;max-width:100%;padding:5px 9px;margin-bottom:6px;border-radius:10px;background:rgba(255,255,255,.96);color:var(--ink);text-shadow:none}\n.map-stop p{padding:7px 9px;border-radius:10px;background:rgba(255,255,255,.94);color:#49695e;box-shadow:0 5px 14px rgba(31,105,73,.08)}\n.map-stop .map-go{box-shadow:0 7px 16px rgba(39,182,107,.22)}\n@media(max-width:560px){.map-stop h3{font-size:20px;padding:4px 8px}.map-stop p{font-size:14px;padding:6px 8px}}\n'''
+          css = '''
+/* header-alignment */
+.nav{min-width:0;align-items:center}
+.logo{height:44px;align-items:center;gap:8px;font-size:18px;line-height:1;letter-spacing:-.02em}
+.logo-mark{width:38px;height:38px;border-radius:12px;font-size:20px;flex:none}
+.nav-links{align-items:center;gap:16px;font-size:13px;line-height:1;white-space:nowrap}
+.nav-links a{display:flex;align-items:center;height:38px}
+.nav-cta{display:inline-flex;align-items:center;justify-content:center;height:38px;padding:0 14px;border-radius:13px;font-size:13px;line-height:1;white-space:nowrap}
+.mobile-menu-btn{width:38px;height:38px;display:none;align-items:center;justify-content:center;line-height:1;padding:0}
+@media(max-width:900px){.nav-links{gap:12px;font-size:12px}.nav-cta{padding:0 11px;font-size:12px}.logo{font-size:17px}.logo-mark{width:36px;height:36px;font-size:19px}}
+@media(max-width:720px){.nav{height:64px;gap:10px}.logo{height:38px;font-size:16px;gap:7px}.logo-mark{width:34px;height:34px;border-radius:11px;font-size:18px}.nav-links,.nav-cta{display:none}.mobile-menu-btn{display:flex;flex:none;font-size:23px}}
+@media(max-width:420px){.logo{font-size:15px}.logo-mark{width:32px;height:32px;font-size:17px}}
+'''
           s = s.replace('</style>', css + '</style>', 1)
           p.write_text(s, encoding='utf-8')
           PY
-      - name: Commit fix
+      - name: Commit and remove temporary workflow
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add index.html
-          git diff --cached --quiet && exit 0
-          git commit -m 'fix: improve map text readability'
+          git diff --cached --quiet || git commit -m 'style: reduce and center header controls'
+          git push
+          rm -f .github/workflows/fix-map-text-visibility.yml
+          git add .github/workflows/fix-map-text-visibility.yml
+          git diff --cached --quiet || git commit -m 'chore: remove temporary workflow'
           git push
