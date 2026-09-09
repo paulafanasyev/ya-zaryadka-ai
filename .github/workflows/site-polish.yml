@@ -1,0 +1,44 @@
+name: Site polish
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  polish:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Adjust header branding
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('index.html')
+          s = p.read_text(encoding='utf-8')
+          old = '.logo{display:flex;align-items:center;gap:10px;font-weight:900;font-size:21px}'
+          new = '.logo{display:flex;align-items:center;gap:10px;font-weight:900;font-size:21px;white-space:nowrap;flex-shrink:0}.logo span{white-space:nowrap}'
+          if old in s and new not in s:
+              s = s.replace(old, new, 1)
+          s = s.replace('<div class="logo-mark">', '<div class="logo-mark">', 1)
+          p.write_text(s, encoding='utf-8')
+          PY
+      - name: Remove maintenance workflow
+        run: |
+          git add index.html
+          git diff --cached --quiet && exit 0
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'style: keep header branding on one line'
+          git push
+      - name: Self remove
+        if: success()
+        run: |
+          rm -f .github/workflows/site-polish.yml
+          git add -A
+          git diff --cached --quiet && exit 0
+          git commit -m 'chore: remove temporary maintenance workflow'
+          git push
