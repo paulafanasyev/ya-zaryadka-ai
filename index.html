@@ -39,6 +39,15 @@ a:focus,button:focus{outline:3px solid var(--green);outline-offset:2px}
 @media(max-width:900px){.map-path{grid-template-columns:1fr 1fr}.map-path:before{left:25%;right:25%;top:25%;bottom:25%;width:12px;height:auto}.map-stop:nth-child(2),.map-stop:nth-child(3){transform:none}.map-stop:nth-child(2):hover,.map-stop:nth-child(3):hover{transform:translateY(-8px)}}
 @media(max-width:560px){.world-map{padding-bottom:80px}.map-head h2{font-size:35px}.map-head p{font-size:15px}.map-path{grid-template-columns:1fr;gap:14px}.map-path:before{display:none}.map-stop,.map-stop:nth-child(2),.map-stop:nth-child(3){min-height:255px;transform:none}.map-scene{height:145px}.map-stop h3{font-size:21px}.map-bottom{height:65px}.map-bottom:after{font-size:17px;letter-spacing:4px}}
 
+
+/* map-text-visibility-fix */
+.map-stop .map-scene{z-index:1;pointer-events:none}
+.map-stop .map-number,.map-stop .map-sparkles{z-index:7}
+.map-stop h3,.map-stop p,.map-stop .map-go{position:relative;z-index:8}
+.map-stop h3{display:block;width:max-content;max-width:100%;padding:5px 9px;margin-bottom:6px;border-radius:10px;background:rgba(255,255,255,.96);color:var(--ink);text-shadow:none}
+.map-stop p{padding:7px 9px;border-radius:10px;background:rgba(255,255,255,.94);color:#49695e;box-shadow:0 5px 14px rgba(31,105,73,.08)}
+.map-stop .map-go{box-shadow:0 7px 16px rgba(39,182,107,.22)}
+@media(max-width:560px){.map-stop h3{font-size:20px;padding:4px 8px}.map-stop p{font-size:14px;padding:6px 8px}}
 </style>
 </head>
 <body>
