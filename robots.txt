@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /pages/privacy.html
+Disallow: /pages/parents.html
+
+Sitemap: https://paulafanasyev.github.io/ya-zaryadka-ai/sitemap.xml
