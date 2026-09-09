@@ -1,0 +1,56 @@
+name: Brand and header normalization
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Normalize brand and header
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          root = Path('.')
+          files = [p for p in root.rglob('*') if p.is_file() and p.suffix.lower() in {'.html','.htm','.js','.jsx','.ts','.tsx','.css','.md'} and '.git' not in p.parts]
+          for p in files:
+              s = p.read_text(encoding='utf-8')
+              old = s
+              # Product branding: every standalone occurrence becomes the full product name.
+              s = re.sub(r'Я-Зарядка(?!\s*AI)', 'Я-Зарядка AI', s)
+              # Remove the Map of World item from the site header/navigation only.
+              def clean_nav(m):
+                  nav = m.group(0)
+                  nav = re.sub(r'<a\b[^>]*>\s*Карта Мира\s*</a>', '', nav, flags=re.I)
+                  return nav
+              s = re.sub(r'<nav\b[^>]*>.*?</nav>', clean_nav, s, flags=re.I|re.S)
+              # Header must keep the brand on one line and vertically centered.
+              if p.name == 'index.html':
+                  marker = '/* final-brand-header-normalization */'
+                  if marker not in s and '</style>' in s:
+                      css = '''\n/* final-brand-header-normalization */\n.nav{display:flex;align-items:center;justify-content:space-between;flex-wrap:nowrap;min-height:68px;gap:14px}.logo{display:flex;align-items:center;flex:none;white-space:nowrap;font-size:17px;line-height:1}.logo span{white-space:nowrap;display:inline-block}.nav-links{display:flex;align-items:center;justify-content:center;gap:16px;white-space:nowrap;flex:none}.nav-links a{display:inline-flex;align-items:center;justify-content:center;white-space:nowrap;line-height:1}.nav-cta{display:inline-flex;align-items:center;justify-content:center;white-space:nowrap;height:36px;padding:0 13px;font-size:13px;line-height:1;flex:none}@media(max-width:720px){.nav{min-height:64px}.logo{font-size:15px}.nav-links,.nav-cta{display:none}}\n'''
+                      s = s.replace('</style>', css + '</style>', 1)
+              if s != old:
+                  p.write_text(s, encoding='utf-8')
+          PY
+      - name: Verify
+        run: |
+          ! grep -RIn --exclude-dir=.git -E 'Я-Зарядка( |$|[—–,.:;!?])' --include='*.html' --include='*.htm' . || true
+          grep -RIn --exclude-dir=.git 'Я-Зарядка AI' --include='*.html' . | head -20
+          ! grep -RIn --exclude-dir=.git -E '<a[^>]*>[^<]*Карта Мира[^<]*</a>' --include='*.html' --include='*.htm' . || true
+      - name: Commit changes and remove workflow
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git diff --cached --quiet || git commit -m 'fix: normalize Ya-Zaryadka AI branding and header'
+          git push
+          git rm .github/workflows/brand-header-fix.yml || true
+          git commit -m 'chore: remove temporary brand workflow' || true
+          git push
