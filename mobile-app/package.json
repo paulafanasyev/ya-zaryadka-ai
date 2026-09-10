@@ -1,0 +1,61 @@
+{
+  "name": "ya-zaryadka-ai-mobile",
+  "version": "0.1.0",
+  "description": "Я-Зарядка AI - интерактивное мобильное приложение для детей 6-14 лет",
+  "main": "node_modules/expo/AppEntry.js",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "test": "jest",
+    "lint": "eslint . --ext .ts,.tsx",
+    "build:apk": "eas build --platform android --profile production"
+  },
+  "dependencies": {
+    "@react-native-async-storage/async-storage": "1.21.0",
+    "@react-native-community/netinfo": "^12.0.1",
+    "@react-navigation/native": "^6.1.0",
+    "@react-navigation/stack": "^6.3.0",
+    "axios": "^1.6.0",
+    "expo": "~50.0.0",
+    "expo-camera": "~14.0.0",
+    "expo-file-system": "~16.0.0",
+    "expo-media-library": "~15.9.0",
+    "expo-speech": "~14.0.0",
+    "expo-status-bar": "~1.11.0",
+    "expo-tracking-transparency": "~3.3.0",
+    "react": "18.2.0",
+    "react-native": "0.73.0",
+    "react-native-gesture-handler": "~2.14.0",
+    "react-native-reanimated": "~3.6.0",
+    "react-native-safe-area-context": "4.8.2",
+    "react-native-screens": "~3.29.0",
+    "react-native-svg": "^14.1.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.23.0",
+    "@testing-library/react-native": "^12.4.0",
+    "@types/jest": "^29.5.0",
+    "@types/react": "~18.2.45",
+    "@typescript-eslint/eslint-plugin": "^6.15.0",
+    "@typescript-eslint/parser": "^6.15.0",
+    "detox": "^20.19.0",
+    "eas-cli": "^7.0.0",
+    "eslint": "^8.56.0",
+    "eslint-plugin-react": "^7.33.0",
+    "jest": "^29.7.0",
+    "jest-expo": "~50.0.0",
+    "typescript": "^5.3.0"
+  },
+  "jest": {
+    "preset": "jest-expo",
+    "transformIgnorePatterns": [
+      "node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg)"
+    ],
+    "setupFilesAfterEnv": [
+      "./jest.setup.ts"
+    ]
+  },
+  "private": true
+}
