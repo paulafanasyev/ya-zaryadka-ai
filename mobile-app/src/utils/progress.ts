@@ -1,6 +1,12 @@
-import { Achievement } from '../src/types';
+/**
+ * Progress utilities for achievements and workout tracking
+ */
 
-// Mock achievement calculation logic
+import { Achievement } from '../types';
+
+/**
+ * Calculate new achievements based on user progress
+ */
 export const calculateAchievements = (
   workoutDays: number,
   exercisesCompleted: number,
@@ -122,17 +128,21 @@ export const calculateAchievements = (
   return newAchievements;
 };
 
-// Calculate points for completed workout
+/**
+ * Calculate points for completed workout
+ */
 export const calculateWorkoutPoints = (exercisesCompleted: number): number => {
   return exercisesCompleted * 10;
 };
 
-// Check if user is on a streak
+/**
+ * Check if user is on a streak
+ */
 export const checkStreak = (lastWorkoutDate: Date | null, today: Date = new Date()): boolean => {
   if (!lastWorkoutDate) return false;
   
   const diffTime = Math.abs(today.getTime() - lastWorkoutDate.getTime());
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
   
   return diffDays <= 1;
 };

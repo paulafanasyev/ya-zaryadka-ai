@@ -1,4 +1,4 @@
-import { calculateAchievements, calculateWorkoutPoints, checkStreak } from './progress';
+import { calculateAchievements, calculateWorkoutPoints, checkStreak } from '../src/utils/progress';
 
 describe('Progress Calculations', () => {
   describe('calculateWorkoutPoints', () => {
