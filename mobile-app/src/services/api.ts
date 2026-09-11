@@ -1,6 +1,10 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { User, Exercise, Achievement, CreativeWork, Activity, Message } from '../types';
+import { aiProvider, AIMessage } from './aiProvider';
+
+export { aiProvider } from './aiProvider';
+export type { AIMessage } from './aiProvider';
 
 const API_URL = process.env.API_URL || 'https://api.ya-zaryadka.ru/api';
 
@@ -11,7 +15,6 @@ const api = axios.create({
   },
 });
 
-// Add token to requests
 api.interceptors.request.use(async (config) => {
   const token = await AsyncStorage.getItem('authToken');
   if (token) {
@@ -90,18 +93,23 @@ export const creativeService = {
 
 export const chatService = {
   async sendMessage(message: string, conversationId?: number): Promise<Message> {
-    const response = await api.post('/ai/chat', { conversationId, message });
-    return response.data;
+    const policyMessages: AIMessage[] = [{ role: 'user', content: message }];
+    const aiResponse = await aiProvider.sendMessage(policyMessages);
+
+    return {
+      id: Date.now(),
+      conversationId: conversationId || 0,
+      fromUser: false,
+      content: aiResponse.text,
+      sentAt: new Date().toISOString(),
+    } as Message;
   },
 
   async streamMessage(message: string, conversationId?: number) {
-    // For streaming responses via SSE or WebSocket
-    const response = await api.post('/ai/stream', { conversationId, message });
-    return response.data;
+    return this.sendMessage(message, conversationId);
   },
 };
 
-// Offline-first helper
 export const offlineCache = {
   async cacheExercises(exercises: Exercise[]) {
     await AsyncStorage.setItem('cachedExercises', JSON.stringify(exercises));
