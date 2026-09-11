@@ -1,21 +1,129 @@
-# Я-Зарядка AI — landing
+# ⚡ Я-Зарядка AI
 
-Production-style static landing for **Я-Зарядка AI**, based on the approved visual direction from Image 1.
+Весёлая зарядка для детей от 5 до 14 лет. Игровые тренировки, достижения и прогресс ребёнка в одном приложении.
 
-## Preview hosting
+## 🌐 Сайт проекта
 
-The simplest free preview is GitHub Pages. GitHub Pages publishes static HTML/CSS/JS directly from a repository. On GitHub Free, the repository must be public for Pages. The expected project URL after enabling Pages is:
+**GitHub Pages:** https://paulafanasyev.github.io/ya-zaryadka-ai/
 
-`https://paulafanasyev.github.io/ya-zaryadka-ai/`
+**Домен (планируется):** я-зарядка.рф
 
-The repository is currently private, so this URL will not become public until the repository is made public or the site is deployed through another free Pages provider.
+## 📁 Структура проекта
 
-## RuStore
+```
+ya-zaryadka-ai/
+├── index.html              # Главная страница лендинга
+├── 404.html                # Страница ошибки 404
+├── manifest.webmanifest    # PWA манифест
+├── robots.txt              # Правила для поисковиков
+├── sitemap.xml             # Карта сайта
+├── styles/
+│   └── main.css            # Основные стили (CSS3)
+├── scripts/
+│   └── main.js             # Основная логика (ES6+)
+├── pages/
+│   ├── privacy.html        # Политика конфиденциальности
+│   └── parents.html        # Информация для родителей
+├── assets/
+│   ├── logo/               # Логотипы
+│   ├── icons/              # Иконки
+│   ├── social/             # Социальные изображения
+│   └── og/                 # Open Graph изображения
+├── .github/
+│   ├── workflows/
+│   │   └── deploy.yml      # CI/CD для деплоя
+│   └── security.txt        # Политика безопасности
+└── .well-known/
+    └── security.txt        # Security.txt для домена
+```
 
-The landing uses the verified project RuStore URL:
+## ✨ Функции
 
-`https://www.rustore.ru/catalog/app/app.vercel.yazaryadk`
+### Для детей:
+- 🎮 Интерактивные мини-игры ("Ловец звёзд")
+- 💪 Демонстрация упражнений с анимацией
+- 🌟 Система достижений и наград
+- 🤖 AI-помощник с мотивирующими сообщениями
+- 🎨 Яркий дизайн с анимациями
+- ☀️ Солнце следует за курсором (desktop)
+- ✨ Частицы при кликах
 
-## Production domain
+### Для родителей:
+- 🔒 Подробная информация о безопасности
+- 📊 Контроль прогресса ребёнка
+- ❤️ Польза для здоровья
+- ❓ FAQ с ответами на вопросы
+- 📄 Политика конфиденциальности
+- 👨‍👩‍👧‍👦 Информация о семейных активностях
 
-The intended production domain is `я-зарядка.рф`. For a custom domain, configure DNS at the domain provider and point it to the selected hosting provider. Do not publish a guessed DNS configuration.
+### Технические особенности:
+- 🌓 Автоматическая ночная тема (с 19:00 до 06:00)
+- 📱 Полная адаптивность под все устройства
+- ♿ Доступность (a11y): focus states, aria-метки
+- 🎭 Анимации с учётом prefers-reduced-motion
+- 🚀 PWA-ready (манифест, standalone режим)
+- 🔍 SEO оптимизация (meta tags, sitemap, robots.txt)
+- 🛡️ Security.txt и политика безопасности
+- ⚡ CI/CD через GitHub Actions
+
+## 🚀 Развёртывание
+
+Сайт автоматически развёртывается на GitHub Pages при push в ветку `main`.
+
+### Локальный запуск:
+
+```bash
+# Вариант 1: Простой HTTP сервер
+python -m http.server 8080
+
+# Вариант 2: Node.js
+npx serve .
+
+# Вариант 3: PHP
+php -S localhost:8080
+```
+
+Откройте http://localhost:8080 в браузере.
+
+## 📊 Деплой
+
+Автоматический деплой настроен через GitHub Actions:
+- Валидация HTML структуры
+- Проверка наличия всех требуемых файлов
+- Деплой на GitHub Pages
+
+## 📱 PWA
+
+Сайт готов к установке как PWA:
+- Манифест с иконками
+- Standalone display mode
+- Theme color для статус-бара
+
+## 🔒 Безопасность данных
+
+- Никаких реальных имён детей
+- Серверы на территории РФ (152-ФЗ)
+- Шифрование HTTPS/TLS
+- Минимальный сбор данных
+- Право на удаление данных
+
+## 👥 Контакты
+
+**Владелец проекта:** Саитгареев Руслан
+
+- **Email:** support@yazaryadka.ru
+- **Telegram:** @YaZaryadkaAI_support
+- **ВКонтакте:** https://vk.com/yazaryadkaai
+
+## 📄 Лицензия
+
+© 2026 Я-Зарядка AI. Все права защищены.
+
+## 🎯 Roadmap
+
+- [ ] Реальные HTML5 игры
+- [ ] Голосовое сопровождение упражнений
+- [ ] Семейные челленджи онлайн
+- [ ] Интеграция с носимыми устройствами
+- [ ] Персональные программы тренировок AI
+- [ ] Мультиязычность (EN, ES, ZH)
