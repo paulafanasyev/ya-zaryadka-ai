@@ -1,148 +1,132 @@
 /**
- * AI Provider - Abstract layer for LLM integration
- * Supports OpenAI, Gemini, Anthropic, and mock provider
+ * Piko AI client.
+ * The mobile app never contains an APINEX secret. The server-side /ai/chat
+ * endpoint owns the secret and may route/fail over between configured models.
  */
 
 import axios from 'axios';
+import { checkChildSafety, SVETLANA_SYSTEM_PROMPT } from './aiPolicy';
 
-export type AIProviderType = 'openai' | 'gemini' | 'anthropic' | 'mock';
+export type AIProviderType = 'piko-proxy' | 'mock';
 
 export interface AIConfig {
   provider: AIProviderType;
-  apiKey?: string;
   apiUrl?: string;
   model?: string;
+  models?: string[];
 }
 
 export interface AIMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
+  id?: number;
+  conversationId?: number;
+  fromUser?: boolean;
+  sentAt?: string;
 }
 
 export interface AIResponse {
   text: string;
   conversationId?: string;
+  model?: string;
+  fallbackUsed?: boolean;
+  blocked?: boolean;
 }
+
+export const PIKO_MODELS = [
+  'free/glm-5.3-flash',
+  'free/gemini-3.8-flash',
+  'free/muse-spark-1.3',
+  'free/deepseek-v4-pro-0813',
+  'free/gpt-5.6-luna',
+  'free/qwen-3.8-max',
+] as const;
+
+const DEFAULT_API_URL = process.env.API_URL || 'https://api.ya-zaryadka.ru/api';
 
 class AIProvider {
   private config: AIConfig;
 
   constructor(config: AIConfig) {
-    this.config = config;
+    this.config = {
+      ...config,
+      models: config.models?.length ? config.models : [...PIKO_MODELS],
+    };
   }
 
   async sendMessage(messages: AIMessage[]): Promise<AIResponse> {
-    switch (this.config.provider) {
-      case 'openai':
-        return this.sendToOpenAI(messages);
-      case 'gemini':
-        return this.sendToGemini(messages);
-      case 'anthropic':
-        return this.sendToAnthropic(messages);
-      case 'mock':
-      default:
-        return this.sendMock(messages);
+    const userMessage = [...messages].reverse().find((message) => message.role === 'user');
+    const policy = checkChildSafety(userMessage?.content || '');
+
+    if (!policy.allowed) {
+      return { text: policy.response, blocked: true };
     }
+
+    if (this.config.provider === 'mock') {
+      return this.sendMock(userMessage?.content || '');
+    }
+
+    return this.sendThroughProxy(messages);
   }
 
-  private async sendToOpenAI(messages: AIMessage[]): Promise<AIResponse> {
-    const response = await axios.post(
-      this.config.apiUrl || 'https://api.openai.com/v1/chat/completions',
-      {
-        model: this.config.model || 'gpt-4o-mini',
-        messages: [
+  private async sendThroughProxy(messages: AIMessage[]): Promise<AIResponse> {
+    const models = this.config.model ? [this.config.model] : (this.config.models || [...PIKO_MODELS]);
+    let lastError: unknown;
+
+    for (let index = 0; index < models.length; index += 1) {
+      const model = models[index];
+      try {
+        const response = await axios.post(
+          `${(this.config.apiUrl || DEFAULT_API_URL).replace(/\/$/, '')}/ai/chat`,
           {
-            role: 'system',
-            content: `Ты - Светлана, дружелюбный ИИ-помощник для детей 6-14 лет. 
-Твоя задача - помогать детям с утренней зарядкой, отвечать на вопросы о здоровье и финансах.
-Говори просто, понятно и весело. Не давай медицинских советов. Если ребёнку больно - скажи остановиться.
-Поощряй активность и здоровые привычки.`,
+            messages: [
+              { role: 'system', content: SVETLANA_SYSTEM_PROMPT },
+              ...messages.map(({ role, content }) => ({ role, content })),
+            ],
+            model,
+            fallbackModels: models.slice(index + 1),
+            ageRange: '6-14',
+            assistant: 'piko',
           },
-          ...messages,
-        ],
-      },
-      {
-        headers: {
-          'Authorization': `Bearer ${this.config.apiKey}`,
-          'Content-Type': 'application/json',
-        },
+          {
+            timeout: 30000,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        );
+
+        const text = response.data?.text || response.data?.message?.content || response.data?.choices?.[0]?.message?.content;
+        if (!text) throw new Error('AI proxy returned an empty response');
+
+        return {
+          text,
+          conversationId: response.data?.conversationId,
+          model: response.data?.model || model,
+          fallbackUsed: response.data?.fallbackUsed ?? index > 0,
+        };
+      } catch (error) {
+        lastError = error;
       }
-    );
-
-    return {
-      text: response.data.choices[0].message.content,
-    };
-  }
-
-  private async sendToGemini(messages: AIMessage[]): Promise<AIResponse> {
-    const lastMessage = messages[messages.length - 1];
-    const response = await axios.post(
-      this.config.apiUrl || `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${this.config.apiKey}`,
-      {
-        contents: [{
-          parts: [{
-            text: lastMessage.content
-          }]
-        }],
-      }
-    );
-
-    return {
-      text: response.data.candidates[0].content.parts[0].text,
-    };
-  }
-
-  private async sendToAnthropic(messages: AIMessage[]): Promise<AIResponse> {
-    const response = await axios.post(
-      this.config.apiUrl || 'https://api.anthropic.com/v1/messages',
-      {
-        model: this.config.model || 'claude-3-haiku-20240307',
-        max_tokens: 500,
-        messages: messages.filter(m => m.role !== 'system'),
-        system: `Ты - Светлана, дружелюбный ИИ-помощник для детей. Говори просто и весело.`,
-      },
-      {
-        headers: {
-          'x-api-key': this.config.apiKey,
-          'Content-Type': 'application/json',
-        },
-      }
-    );
-
-    return {
-      text: response.data.content[0].text,
-    };
-  }
-
-  private async sendMock(messages: AIMessage[]): Promise<AIResponse> {
-    // Mock responses for offline/testing
-    const userMessage = messages[messages.length - 1]?.content || '';
-    const lowerMessage = userMessage.toLowerCase();
-
-    let responseText = 'Привет! Я Светлана, твой помощник для зарядки! ';
-
-    if (lowerMessage.includes('привет') || lowerMessage.includes('здравствуй')) {
-      responseText = 'Привет! Готов сделать зарядку сегодня? 😊';
-    } else if (lowerMessage.includes('как дела')) {
-      responseText = 'У меня всё отлично! А ты уже сделал зарядку?';
-    } else if (lowerMessage.includes('зарядк')) {
-      responseText = 'Зарядка - это здорово! Давай сделаем 10 минут упражнений вместе! 💪';
-    } else if (lowerMessage.includes('устал') || lowerMessage.includes('больн')) {
-      responseText = 'Если тебе больно или очень устал - лучше остановись и отдохни. Здоровье важнее!';
-    } else if (lowerMessage.includes('деньг') || lowerMessage.includes('копилк')) {
-      responseText = 'Отлично, что думаешь о деньгах! За каждую зарядку ты получаешь монетки. Копи их и учись управлять ими разумно! 🪙';
-    } else if (lowerMessage.includes('спасиб')) {
-      responseText = 'Пожалуйста! Ты молодец! Так держать! 🌟';
-    } else {
-      responseText = 'Интересный вопрос! А давай лучше сделаем зарядку? Это полезно и весело!';
     }
 
-    // Simulate delay
-    await new Promise(resolve => setTimeout(resolve, 500));
+    throw lastError instanceof Error ? lastError : new Error('Piko AI proxy is unavailable');
+  }
 
-    return {
-      text: responseText,
-    };
+  private async sendMock(userMessage: string): Promise<AIResponse> {
+    const lower = userMessage.toLowerCase();
+    let text = 'Привет! Я Пико. Давай сделаем что-нибудь полезное и весёлое.';
+
+    if (lower.includes('заряд') || lower.includes('упражнен')) {
+      text = 'Отлично! Давай начнём с разминки. Делай движения спокойно и без боли.';
+    } else if (lower.includes('пушкин') || lower.includes('сказк')) {
+      text = 'Можем обсудить сказки Пушкина, героев и придумать безопасное творческое задание.';
+    } else if (lower.includes('деньг') || lower.includes('копил')) {
+      text = 'Деньги можно планировать: часть потратить, часть сохранить. Так проще достигать целей.';
+    } else if (lower.includes('спасибо')) {
+      text = 'Пожалуйста! Ты хорошо справляешься.';
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    return { text, model: 'mock' };
   }
 
   updateConfig(newConfig: Partial<AIConfig>) {
@@ -150,9 +134,6 @@ class AIProvider {
   }
 }
 
-// Default instance with mock provider (for offline-first)
-export const aiProvider = new AIProvider({
-  provider: 'mock',
-});
+export const aiProvider = new AIProvider({ provider: 'piko-proxy' });
 
 export default AIProvider;
