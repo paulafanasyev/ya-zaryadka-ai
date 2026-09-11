@@ -1,0 +1,38 @@
+name: Place first hero robot
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  place:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Replace hero robot image
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('index.html')
+          s = p.read_text(encoding='utf-8')
+          old = 'https://cdn.pixabay.com/photo/2026/04/07/06/31/06-31-14-409_1280.jpg'
+          new = 'assets/robot/robot_3Dblue.png'
+          if old not in s:
+              raise SystemExit('Current hero robot image URL was not found; refusing to modify unrelated content')
+          s = s.replace(old, new, 1)
+          p.write_text(s, encoding='utf-8')
+          PY
+      - name: Commit site change
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html
+          git diff --cached --quiet || git commit -m 'site: place first hero robot'
+          git push
+      - name: Remove temporary workflow
+        run: |
+          git rm .github/workflows/place-first-hero.yml
+          git commit -m 'chore: remove temporary robot placement workflow'
+          git push
