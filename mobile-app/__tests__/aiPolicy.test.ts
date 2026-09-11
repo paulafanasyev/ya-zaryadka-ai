@@ -1,4 +1,5 @@
-import { checkChildSafety, PIKO_MODELS } from '../src/services/aiPolicy';
+import { checkChildSafety } from '../src/services/aiPolicy';
+import { PIKO_MODELS } from '../src/services/aiProvider';
 
 describe('Piko child safety policy', () => {
   it('allows charging questions', () => {
