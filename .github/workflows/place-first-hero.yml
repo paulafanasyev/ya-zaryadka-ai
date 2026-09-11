@@ -1,13 +1,15 @@
 name: Place first hero robot
 
 on:
-  workflow_dispatch:
+  push:
+    branches: [main]
 
 permissions:
   contents: write
 
 jobs:
   place:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -31,8 +33,6 @@ jobs:
           git add index.html
           git diff --cached --quiet || git commit -m 'site: place first hero robot'
           git push
-      - name: Remove temporary workflow
-        run: |
           git rm .github/workflows/place-first-hero.yml
           git commit -m 'chore: remove temporary robot placement workflow'
           git push
