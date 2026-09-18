@@ -21,14 +21,19 @@ html,body{margin:0;min-height:100%;font-family:Inter,system-ui,-apple-system,"Se
     const styles=`<style id="app-screenshots-style">
       .app-screenshots{background:linear-gradient(180deg,#f7fff9 0%,#e8fbf0 100%);padding:92px 0}
       .app-screenshots .section-head{margin-bottom:38px}
-      .app-shot-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:28px;align-items:start}
+      .app-shot-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px;align-items:start}
       .app-shot{margin:0;background:#fff;border:8px solid #fff;border-radius:34px;overflow:hidden;box-shadow:0 22px 60px rgba(31,105,73,.14)}
       .app-shot img{display:block;width:100%;height:auto;background:#eef9f1}
       .app-shot figcaption{padding:18px 20px 20px;font-weight:900;color:#19372d}
       .app-shot figcaption small{display:block;margin-top:5px;font-weight:600;color:#668076}
+      @media(max-width:950px){.app-shot-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
       @media(max-width:700px){.app-screenshots{padding:68px 0}.app-shot-grid{grid-template-columns:1fr}.app-shot{max-width:559px;margin:auto}}
     </style>`;
-    const section=`<section class="app-screenshots" id="app-screenshots"><div class="container"><div class="section-head reveal"><h2>Скриншоты работы приложения</h2><p>Реальный экран Я-Зарядка AI — меню приложения и раздел «Настройки».</p></div><div class="app-shot-grid"><figure class="app-shot reveal"><img src="assets/screenshots/app-menu-settings.svg" alt="Скриншот приложения Я-Зарядка AI: меню и раздел Настройки" loading="lazy"><figcaption>Меню приложения <small>Баланс · Профиль · Информация · Настройки · Поделиться · QR-код · Поддержка · О приложении</small></figcaption></figure></div></div></section>`;
+    const section=`<section class="app-screenshots" id="app-screenshots"><div class="container"><div class="section-head reveal"><h2>Скриншоты работы приложения</h2><p>Реальные экраны Я-Зарядка AI: меню, главный экран и начисление баллов за зарядку.</p></div><div class="app-shot-grid">
+      <figure class="app-shot reveal"><img src="assets/screenshots/app-menu-settings.svg" alt="Скриншот приложения Я-Зарядка AI: меню и раздел Настройки" loading="lazy"><figcaption>Меню приложения <small>Баланс · Профиль · Информация · Настройки · Поделиться · QR-код · Поддержка · О приложении</small></figcaption></figure>
+      <figure class="app-shot reveal"><img src="assets/screenshots/app-home-reward.svg" alt="Скриншот приложения Я-Зарядка AI: главный экран и награды" loading="lazy"><figcaption>Главный экран и награды <small>Копилка сердец и молний · вознаграждение · ролики · добрые дела</small></figcaption></figure>
+      <figure class="app-shot reveal"><img src="assets/screenshots/app-points-reward.svg" alt="Скриншот приложения Я-Зарядка AI: баллы за зарядку" loading="lazy"><figcaption>Баллы за зарядку <small>Начисление Сердец и Молний и выбор вознаграждения</small></figcaption></figure>
+    </div></div></section>`;
     html=html.replace('</head>',styles+'</head>').replace('</main>',section+'</main>');
     document.open();document.write(html);document.close();
   }catch(error){
