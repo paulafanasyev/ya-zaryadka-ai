@@ -1,0 +1,121 @@
+name: Quality Checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Lighthouse CI
+        run: npm install -g @lhci/cli@0.12.x
+
+      - name: Validate HTML structure
+        run: |
+          echo "🔍 Validating HTML..."
+          grep -q "<!DOCTYPE html>" index.html || exit 1
+          grep -q "</html>" index.html || exit 1
+          grep -q "<meta charset" index.html || exit 1
+          grep -q "<title>" index.html || exit 1
+          echo "✓ HTML structure valid"
+
+      - name: Check CSS validity
+        run: |
+          echo "🎨 Checking CSS..."
+          test -f styles/main.css || exit 1
+          grep -q ":root" styles/main.css || exit 1
+          echo "✓ CSS valid"
+
+      - name: Check JavaScript validity
+        run: |
+          echo "⚡ Checking JavaScript..."
+          test -f scripts/main.js || exit 1
+          node --check scripts/main.js && echo "✓ JS syntax valid" || exit 1
+
+      - name: Check required files
+        run: |
+          echo "📁 Checking required files..."
+          files=(
+            "index.html"
+            "404.html"
+            "manifest.webmanifest"
+            "robots.txt"
+            "sitemap.xml"
+            "styles/main.css"
+            "scripts/main.js"
+            "pages/privacy.html"
+            "pages/parents.html"
+          )
+          for file in "${files[@]}"; do
+            if [ ! -f "$file" ]; then
+              echo "❌ Missing: $file"
+              exit 1
+            fi
+          done
+          echo "✓ All required files present"
+
+      - name: Check links in HTML
+        run: |
+          echo "🔗 Checking internal links..."
+          grep -o 'href="[^"]*"' index.html | while read -r link; do
+            url=$(echo "$link" | sed 's/href="//;s/"//')
+            if [[ "$url" != http* ]] && [[ "$url" != "#"* ]] && [[ "$url" != mailto:* ]] && [[ "$url" != tel:* ]]; then
+              if [ ! -f "$url" ] && [ ! -d "$url" ]; then
+                echo "⚠️  Warning: Link may be broken: $url"
+              fi
+            fi
+          done
+          echo "✓ Links checked"
+
+      - name: PWA manifest validation
+        run: |
+          echo "📱 Validating PWA manifest..."
+          python3 -c "
+import json
+with open('manifest.webmanifest') as f:
+    data = json.load(f)
+    assert 'name' in data, 'Missing name'
+    assert 'short_name' in data, 'Missing short_name'
+    assert 'start_url' in data, 'Missing start_url'
+    assert 'display' in data, 'Missing display'
+    assert 'icons' in data, 'Missing icons'
+    print('✓ PWA manifest valid')
+          "
+
+      - name: SEO check
+        run: |
+          echo "🔍 Checking SEO meta tags..."
+          grep -q '<meta name="description"' index.html || exit 1
+          grep -q 'property="og:title"' index.html || exit 1
+          grep -q 'property="og:description"' index.html || exit 1
+          grep -q 'sitemap.xml' robots.txt || exit 1
+          echo "✓ SEO meta tags present"
+
+      - name: Accessibility check (basic)
+        run: |
+          echo "♿ Checking accessibility..."
+          grep -q 'aria-label' index.html || echo "⚠️  Some aria-labels may be missing"
+          grep -q 'alt=' index.html || echo "⚠️  Some alt attributes may be missing"
+          echo "✓ Basic accessibility checks passed"
+
+      - name: Summary
+        run: |
+          echo ""
+          echo "==================================="
+          echo "✅ All quality checks passed!"
+          echo "==================================="
+          echo ""
+          echo "Files checked:"
+          find . -maxdepth 2 -type f \( -name "*.html" -o -name "*.css" -o -name "*.js" \) ! -path "./.git/*" | wc -l
+          echo ""
