@@ -29,10 +29,10 @@ html,body{margin:0;min-height:100%;font-family:Inter,system-ui,-apple-system,"Se
       @media(max-width:950px){.app-shot-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
       @media(max-width:700px){.app-screenshots{padding:68px 0}.app-shot-grid{grid-template-columns:1fr}.app-shot{max-width:559px;margin:auto}}
     </style>`;
-    const section=`<section class="app-screenshots" id="app-screenshots"><div class="container"><div class="section-head reveal"><h2>Скриншоты работы приложения</h2><p>Реальные экраны Я-Зарядка AI: меню, главный экран и начисление баллов за зарядку.</p></div><div class="app-shot-grid">
-      <figure class="app-shot reveal"><img src="assets/screenshots/app-menu-settings.svg" alt="Скриншот приложения Я-Зарядка AI: меню и раздел Настройки" loading="lazy"><figcaption>Меню приложения <small>Баланс · Профиль · Информация · Настройки · Поделиться · QR-код · Поддержка · О приложении</small></figcaption></figure>
-      <figure class="app-shot reveal"><img src="assets/screenshots/app-home-reward.svg" alt="Скриншот приложения Я-Зарядка AI: главный экран и награды" loading="lazy"><figcaption>Главный экран и награды <small>Копилка сердец и молний · вознаграждение · ролики · добрые дела</small></figcaption></figure>
-      <figure class="app-shot reveal"><img src="assets/screenshots/app-points-reward.svg" alt="Скриншот приложения Я-Зарядка AI: баллы за зарядку" loading="lazy"><figcaption>Баллы за зарядку <small>Начисление Сердец и Молний и выбор вознаграждения</small></figcaption></figure>
+    const section=`<section class="app-screenshots" id="app-screenshots"><div class="container"><div class="section-head reveal"><h2>Скриншоты работы приложения</h2></div><div class="app-shot-grid">
+      <figure class="app-shot reveal"><img src="assets/screenshots/app-menu-settings.svg" alt="Скриншот приложения Я-Зарядка AI: меню и раздел Настройки" loading="lazy"></figure>
+      <figure class="app-shot reveal"><img src="assets/screenshots/app-home-reward.svg" alt="Скриншот приложения Я-Зарядка AI: главный экран и награды" loading="lazy"></figure>
+      <figure class="app-shot reveal"><img src="assets/screenshots/app-points-reward.svg" alt="Скриншот приложения Я-Зарядка AI: баллы за зарядку" loading="lazy"></figure>
     </div></div></section>`;
     html=html.replace('</head>',styles+'</head>').replace('</main>',section+'</main>');
     document.open();document.write(html);document.close();
