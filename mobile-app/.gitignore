@@ -1,54 +1,8 @@
-# Dependencies
 node_modules/
-
-# Expo
 .expo/
+android/
+ios/
 dist/
-web-build/
-
-# Native
-*.orig.*
-*.jks
-*.p8
-*.p12
-*.key
-*.mobileprovision
-
-# Metro
-.metro-health-check*
-
-# Testing
-coverage/
-
-# Environment
-.env
-.env.local
-.env.production
-
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
-*~
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Build
-*.apk
-*.aab
-*.ipa
-*.app
-
-# Logs
 *.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Temporary files
-*.tmp
-*.temp
-.cache/
+# Pico image is downloaded from the main branch at build time
+assets/pico.png

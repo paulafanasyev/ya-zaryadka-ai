@@ -1,12 +1,21 @@
 import React from 'react';
-import { AppRegistry } from 'react-native';
-import AppNavigator from './src/navigation/AppNavigator';
-import { name as appName } from './app.json';
+import { StatusBar } from 'expo-status-bar';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
+import { StoreProvider } from './src/store/store';
+import RootNavigator from './src/navigation/RootNavigator';
 
-const App = () => {
-  return <AppNavigator />;
-};
+const theme = { ...DefaultTheme, colors: { ...DefaultTheme.colors, background: '#F4F4EE' } };
 
-AppRegistry.registerComponent(appName, () => App);
-
-export default App;
+export default function App() {
+  return (
+    <SafeAreaProvider>
+      <StoreProvider>
+        <NavigationContainer theme={theme}>
+          <StatusBar style="light" />
+          <RootNavigator />
+        </NavigationContainer>
+      </StoreProvider>
+    </SafeAreaProvider>
+  );
+}
