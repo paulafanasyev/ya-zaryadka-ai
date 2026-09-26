@@ -14,18 +14,26 @@ import { C } from '../theme';
 
 type HintKind = 'safety' | 'frame' | 'technique' | 'motivation';
 
+// Offline page bundled into the APK by scripts/copy-cv-assets.js.
+const LOCAL_POSE_URI = 'file:///android_asset/pose/index.html';
+// Fallback page embedded in JS (loads the engine from CDN).
+const INLINE_BASE_URL = 'https://localhost/';
+const TRUSTED_PREFIXES = ['file:///android_asset/pose/', INLINE_BASE_URL, 'about:blank'];
+const STATUSES = ['init', 'ok', 'no_person', 'too_close', 'too_far', 'multiple', 'dark'];
+
+const isTrustedUrl = (u?: string) => !u || TRUSTED_PREFIXES.some((p) => u.indexOf(p) === 0);
+const clamp = (v: any, lo: number, hi: number) => (typeof v === 'number' && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : lo);
+
 export default function WorkoutSessionScreen({ navigation, route }: any) {
   const programId = route.params ? route.params.programId : undefined;
   const program = PROGRAMS.find((p) => p.id === programId) || PROGRAMS[0];
   const { state, update } = useStore();
   const insets = useSafeAreaInsets();
   const age = state.profile ? state.profile.age : 8;
-  const items = useMemo(
-    () => program.exercises.map((id) => ({ ...EXERCISES[id], target: targetFor(EXERCISES[id], age) })),
-    [program.id, age]
-  );
+  const items = useMemo(() => program.exercises.map((id) => ({ ...EXERCISES[id], target: targetFor(EXERCISES[id], age) })), [program.id, age]);
 
   const [perm, setPerm] = useState<'unknown' | 'granted' | 'denied'>('unknown');
+  const [source, setSource] = useState<'local' | 'inline'>(Platform.OS === 'android' ? 'local' : 'inline');
   const [engine, setEngine] = useState<'loading' | 'ready' | 'error'>('loading');
   const [engineError, setEngineError] = useState('');
   const [status, setStatus] = useState('init');
@@ -44,6 +52,8 @@ export default function WorkoutSessionScreen({ navigation, route }: any) {
   const indexRef = useRef(0);
   const countRef = useRef(0);
   const pausedRef = useRef(false);
+  const sourceRef = useRef(source);
+  sourceRef.current = source;
 
   const say = useCallback(
     (text: string, kind: HintKind, force = false) => {
@@ -90,13 +100,13 @@ export default function WorkoutSessionScreen({ navigation, route }: any) {
   };
   const sendExercise = (i: number) => {
     const ex = items[i];
-    inject('window.setExercise(' + JSON.stringify({ kind: ex.kind, target: ex.target }) + ')');
+    inject('window.setExercise && window.setExercise(' + JSON.stringify({ kind: ex.kind, target: ex.target }) + ')');
   };
 
   const setPausedBoth = (p: boolean) => {
     pausedRef.current = p;
     setPaused(p);
-    inject('window.setPaused(' + (p ? 'true' : 'false') + ')');
+    inject('window.setPaused && window.setPaused(' + (p ? 'true' : 'false') + ')');
   };
 
   useEffect(() => {
@@ -150,37 +160,52 @@ export default function WorkoutSessionScreen({ navigation, route }: any) {
     }
   }, [elapsed]);
 
+  const fallbackToInline = () => {
+    if (sourceRef.current !== 'local') return false;
+    setEngine('loading');
+    setSource('inline');
+    return true;
+  };
+
   const onMessage = (e: any) => {
+    const ne = e && e.nativeEvent ? e.nativeEvent : {};
+    if (!isTrustedUrl(ne.url)) return;
+    if (typeof ne.data !== 'string' || ne.data.length > 4096) return;
     let m: any;
     try {
-      m = JSON.parse(e.nativeEvent.data);
+      m = JSON.parse(ne.data);
     } catch (err) {
       return;
     }
+    if (!m || typeof m.type !== 'string') return;
     if (finished.current) return;
     switch (m.type) {
       case 'ready':
+        console.log('YZCV ready source=' + (typeof m.source === 'string' ? m.source : sourceRef.current));
         setEngine('ready');
         sendExercise(indexRef.current);
-        inject('window.setSkeleton(' + (skeleton ? 'true' : 'false') + ')');
+        inject('window.setSkeleton && window.setSkeleton(' + (skeleton ? 'true' : 'false') + ')');
         say('Если что-то заболит, остановись и скажи взрослым. Начинаем: ' + items[indexRef.current].name + '! ' + items[indexRef.current].cue, 'safety', true);
         break;
       case 'error':
+        console.log('YZCV error code=' + String(m.code) + ' source=' + sourceRef.current);
         setEngine('error');
         setEngineError(
           m.code === 'camera'
             ? 'Не удалось включить камеру. Проверь разрешение для камеры в настройках телефона.'
-            : 'Не удалось загрузить модель распознавания. При первом запуске нужен интернет.'
+            : 'Не удалось запустить распознавание движений. Попробуй ещё раз.'
         );
         break;
-      case 'status':
+      case 'status': {
+        if (typeof m.s !== 'string' || STATUSES.indexOf(m.s) < 0) break;
         setStatus(m.s);
         if (m.s !== 'ok' && FRAME_HINTS[m.s]) say(FRAME_HINTS[m.s], 'frame');
         break;
+      }
       case 'rep': {
         const i = indexRef.current;
-        if (advancing.current) break;
-        metrics.current[i].push({ amp: m.amp, form: m.form, dur: m.dur });
+        if (advancing.current || pausedRef.current) break;
+        metrics.current[i].push({ amp: clamp(m.amp, 0, 100), form: clamp(m.form, 0, 100), dur: clamp(m.dur, 0, 60) });
         const c = countRef.current + 1;
         countRef.current = c;
         setCount(c);
@@ -197,7 +222,7 @@ export default function WorkoutSessionScreen({ navigation, route }: any) {
         break;
       }
       case 'form':
-        if (FORM_HINTS[m.id]) say(FORM_HINTS[m.id], 'technique');
+        if (typeof m.id === 'string' && Object.prototype.hasOwnProperty.call(FORM_HINTS, m.id)) say(FORM_HINTS[m.id], 'technique');
         break;
       default:
         break;
@@ -213,7 +238,7 @@ export default function WorkoutSessionScreen({ navigation, route }: any) {
   const toggleSkeleton = () => {
     const v = !skeleton;
     setSkeleton(v);
-    inject('window.setSkeleton(' + (v ? 'true' : 'false') + ')');
+    inject('window.setSkeleton && window.setSkeleton(' + (v ? 'true' : 'false') + ')');
   };
 
   if (perm === 'denied') {
@@ -234,21 +259,47 @@ export default function WorkoutSessionScreen({ navigation, route }: any) {
 
   const ex = items[index];
   const statusOk = status === 'ok';
+  const local = source === 'local';
 
   return (
     <View style={s.root}>
       {perm === 'granted' ? (
         <WebView
+          key={source}
           ref={web}
           style={s.web}
-          source={{ html: POSE_HTML, baseUrl: 'https://localhost/' }}
+          source={local ? { uri: LOCAL_POSE_URI } : { html: POSE_HTML, baseUrl: INLINE_BASE_URL }}
           originWhitelist={['*']}
+          onShouldStartLoadWithRequest={(req) => {
+            const u = req.url || '';
+            if (u.indexOf('blob:') === 0 || u.indexOf('data:') === 0) return true;
+            return isTrustedUrl(u);
+          }}
           javaScriptEnabled
           domStorageEnabled
+          allowFileAccess={local}
+          allowFileAccessFromFileURLs={local}
+          allowUniversalAccessFromFileURLs={local}
+          mixedContentMode="never"
+          setSupportMultipleWindows={false}
+          javaScriptCanOpenWindowsAutomatically={false}
+          geolocationEnabled={false}
+          thirdPartyCookiesEnabled={false}
+          saveFormDataDisabled
+          webviewDebuggingEnabled={false}
           mediaPlaybackRequiresUserAction={false}
           allowsInlineMediaPlayback
           mediaCapturePermissionGrantType="grant"
           onMessage={onMessage}
+          onError={() => {
+            if (!fallbackToInline()) {
+              setEngine('error');
+              setEngineError('Не удалось запустить распознавание движений. Попробуй ещё раз.');
+            }
+          }}
+          onHttpError={() => {
+            fallbackToInline();
+          }}
           androidLayerType="hardware"
         />
       ) : null}
@@ -296,7 +347,7 @@ export default function WorkoutSessionScreen({ navigation, route }: any) {
           </View>
         </View>
         <View style={s.controls}>
-          <Pressable onPress={toggleSkeleton} style={s.ctrl}>
+          <Pressable onPress={toggleSkeleton} style={s.ctrl} accessibilityLabel="Скелет">
             <Ionicons name={skeleton ? 'body' : 'body-outline'} size={22} color="#FFFFFF" />
             <Text style={s.ctrlText}>Скелет</Text>
           </Pressable>

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <rect width="1024" height="1024" fill="#3DA535"/>
+  <g transform="translate(512 540)">
+    <line x1="0" y1="-300" x2="0" y2="-370" stroke="#FFFFFF" stroke-width="22" stroke-linecap="round"/>
+    <circle cx="0" cy="-395" r="36" fill="#FFD23F"/>
+    <rect x="-300" y="-205" width="44" height="130" rx="22" fill="#FFFFFF"/>
+    <rect x="256" y="-205" width="44" height="130" rx="22" fill="#FFFFFF"/>
+    <rect x="-260" y="-300" width="520" height="330" rx="90" fill="#FFFFFF"/>
+    <rect x="-210" y="-255" width="420" height="240" rx="60" fill="#1F2A24"/>
+    <circle cx="-85" cy="-160" r="34" fill="#7CFC6A"/>
+    <circle cx="85" cy="-160" r="34" fill="#7CFC6A"/>
+    <path d="M -80 -85 Q 0 -30 80 -85" stroke="#7CFC6A" stroke-width="20" fill="none" stroke-linecap="round"/>
+    <rect x="-275" y="80" width="60" height="180" rx="30" fill="#FFFFFF"/>
+    <rect x="215" y="80" width="60" height="180" rx="30" fill="#FFFFFF"/>
+    <rect x="-190" y="50" width="380" height="260" rx="70" fill="#FFFFFF"/>
+    <polygon points="25,80 -60,195 -5,195 -30,290 70,160 15,160 45,80" fill="#FFD23F"/>
+  </g>
+</svg>

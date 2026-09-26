@@ -15,13 +15,39 @@ concurrency:
   group: android-apk-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  POSE_MODEL_URL: https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task
+
 jobs:
-  build:
+  unit-tests:
     runs-on: ubuntu-latest
-    timeout-minutes: 75
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: mobile-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: CV detector unit tests
+        run: node --test cv-web/test/detector.test.js
+
+  build:
+    needs: unit-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    outputs:
+      signing: ${{ steps.sign.outputs.mode }}
+      version: ${{ steps.ver.outputs.version }}
+    defaults:
+      run:
+        working-directory: mobile-app
+    env:
+      KS_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      KS_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS || 'yazaryadka' }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD || secrets.ANDROID_KEYSTORE_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
 
@@ -34,11 +60,29 @@ jobs:
           distribution: temurin
           java-version: 17
 
+      - name: Version
+        id: ver
+        run: |
+          V=$(node -p "require('./app.json').expo.version")
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "VERSION=$V" >> "$GITHUB_ENV"
+          echo "VERSION_CODE=$((1000 + ${{ github.run_number }}))" >> "$GITHUB_ENV"
+
       - name: Fetch Pico image
         run: |
           mkdir -p assets
           curl -fsSL -o assets/pico.png https://raw.githubusercontent.com/paulafanasyev/ya-zaryadka-ai/main/assets/robot/robot_3Dblue.png
           ls -la assets
+
+      - name: Render app icons
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq librsvg2-bin
+          mkdir -p assets ../dist/store
+          rsvg-convert -w 1024 -h 1024 assets-src/icon.svg -o assets/icon.png
+          rsvg-convert -w 1024 -h 1024 assets-src/adaptive-icon.svg -o assets/adaptive-icon.png
+          rsvg-convert -w 512 -h 512 assets-src/icon.svg -o ../dist/store/icon-512.png
+          ls -la assets ../dist/store
 
       - name: Install dependencies
         run: npm install --no-audit --no-fund --legacy-peer-deps
@@ -46,34 +90,199 @@ jobs:
       - name: Align Expo SDK versions
         run: npx expo install --fix -- --legacy-peer-deps || npx expo install --fix
 
+      - name: Download pose model
+        run: |
+          mkdir -p .cache
+          curl -fsSL --retry 3 -o .cache/pose_landmarker_lite.task "$POSE_MODEL_URL"
+          ls -la .cache
+
       - name: Expo prebuild (android)
         env:
           CI: 1
         run: npx expo prebuild --platform android --no-install
 
-      - name: Build release APK (signed with debug key)
-        working-directory: mobile-app/android
-        run: ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a,armeabi-v7a
+      - name: Bundle offline CV assets
+        run: node scripts/copy-cv-assets.js .cache/pose_landmarker_lite.task
 
-      - name: Rename APK
+      - name: Configure signing and version
+        id: sign
         run: |
+          set -euo pipefail
+          sed -i -E "s/versionCode [0-9]+/versionCode $VERSION_CODE/" android/app/build.gradle
+          grep -n "versionCode" android/app/build.gradle
+          if grep -q '^org.gradle.jvmargs' android/gradle.properties; then
+            sed -i -E 's/^org.gradle.jvmargs=.*/org.gradle.jvmargs=-Xmx6g -XX:MaxMetaspaceSize=1g/' android/gradle.properties
+          else
+            echo 'org.gradle.jvmargs=-Xmx6g -XX:MaxMetaspaceSize=1g' >> android/gradle.properties
+          fi
+          KS=android/app/release.keystore
+          MODE=debug
+          if [ -n "${KS_BASE64:-}" ] && [ -n "${KS_PASSWORD:-}" ]; then
+            echo "$KS_BASE64" | base64 -d > "$KS"
+            MODE=release-secret
+          elif [ -n "${KS_PASSWORD:-}" ]; then
+            if [ -f signing/release.keystore.enc ]; then
+              openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in signing/release.keystore.enc -out "$KS" -pass env:KS_PASSWORD
+              MODE=release
+            else
+              keytool -genkeypair -v -storetype PKCS12 -keystore "$KS" -alias "$ANDROID_KEY_ALIAS" -keyalg RSA -keysize 4096 -validity 10000 -storepass "$KS_PASSWORD" -keypass "$KS_PASSWORD" -dname "CN=Ya-Zaryadka AI, O=Ya-Zaryadka, C=RU"
+              mkdir -p signing
+              openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -in "$KS" -out signing/release.keystore.enc -pass env:KS_PASSWORD
+              git config user.name "github-actions[bot]"
+              git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+              git add signing/release.keystore.enc
+              git commit -m "Add encrypted release keystore [skip ci]"
+              git push origin "HEAD:${GITHUB_REF_NAME}"
+              MODE=release-new
+            fi
+          fi
+          echo "Signing mode: $MODE"
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
+          cat >> android/app/build.gradle <<'EOF'
+
+          // ---- added by CI: signing v1+v2+v3 ----
+          android {
+              signingConfigs {
+                  debug {
+                      enableV1Signing true
+                      enableV2Signing true
+                      enableV3Signing true
+                  }
+                  if (file('release.keystore').exists()) {
+                      release {
+                          storeFile file('release.keystore')
+                          storePassword System.getenv('KS_PASSWORD')
+                          keyAlias(System.getenv('ANDROID_KEY_ALIAS') ?: 'yazaryadka')
+                          keyPassword(System.getenv('ANDROID_KEY_PASSWORD') ?: System.getenv('KS_PASSWORD'))
+                          enableV1Signing true
+                          enableV2Signing true
+                          enableV3Signing true
+                      }
+                  }
+              }
+              buildTypes {
+                  release {
+                      if (file('release.keystore').exists()) {
+                          signingConfig signingConfigs.release
+                      }
+                  }
+              }
+          }
+          EOF
+          tail -n 40 android/app/build.gradle
+
+      - name: Build release APK and AAB
+        working-directory: mobile-app/android
+        run: ./gradlew assembleRelease bundleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a,armeabi-v7a,x86_64
+
+      - name: Collect, verify signature, checksums
+        run: |
+          set -euo pipefail
+          N=${{ github.run_number }}
+          rm -f android/app/release.keystore
           mkdir -p ../dist
-          cp android/app/build/outputs/apk/release/app-release.apk ../dist/ya-zaryadka-ai-${{ github.run_number }}.apk
-          ls -la ../dist
+          cp android/app/build/outputs/apk/release/app-release.apk "../dist/ya-zaryadka-ai-$VERSION-$N.apk"
+          cp android/app/build/outputs/bundle/release/app-release.aab "../dist/ya-zaryadka-ai-$VERSION-$N.aab"
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          "$BT/apksigner" verify --verbose --print-certs "../dist/ya-zaryadka-ai-$VERSION-$N.apk" | tee ../dist/signature.txt
+          "$BT/aapt2" dump badging "../dist/ya-zaryadka-ai-$VERSION-$N.apk" | grep -E "^package|uses-permission|sdkVersion" | tee -a ../dist/signature.txt || true
+          cd ../dist
+          sha256sum *.apk *.aab > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+          ls -la
 
       - uses: actions/upload-artifact@v4
         with:
           name: ya-zaryadka-ai-apk
-          path: dist/*.apk
+          path: dist/
 
-      - name: Publish test release
-        uses: softprops/action-gh-release@v2
+  emulator-test:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
         with:
-          tag_name: apk-test-${{ github.run_number }}
+          name: ya-zaryadka-ai-apk
+          path: dist
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install Maestro
+        run: |
+          curl -fsSL "https://get.maestro.mobile.dev" | bash
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+
+      - name: Run app on Android 13 emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 33
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          ram-size: 4096M
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-front emulated -camera-back emulated
+          script: bash mobile-app/e2e/run.sh
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: emulator-results
+          path: mobile-app/e2e/out
+
+  publish:
+    needs: [build, emulator-test]
+    if: always() && needs.build.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ya-zaryadka-ai-apk
+          path: dist
+
+      - name: Release notes
+        run: |
+          MODE="${{ needs.build.outputs.signing }}"
+          case "$MODE" in
+            release*) SIGN="релизный ключ, схемы v1+v2+v3. Подходит для RuStore." ;;
+            *) SIGN="отладочный ключ, не для RuStore. Добавьте секрет ANDROID_KEYSTORE_PASSWORD (см. mobile-app/RELEASE.md)." ;;
+          esac
+          {
+            echo "Версия ${{ needs.build.outputs.version }}, versionCode $((1000 + ${{ github.run_number }})), коммит ${{ github.sha }}."
+            echo ""
+            echo "- Подпись: $SIGN"
+            echo "- Тест на эмуляторе Android 13: ${{ needs.emulator-test.result }}."
+            echo "- Распознавание движений работает офлайн, модель встроена в APK."
+            echo "- APK для установки, AAB для магазинов, icon-512.png для карточки RuStore."
+            echo ""
+            echo '```'
+            cat dist/SHA256SUMS.txt
+            echo '```'
+          } > notes.md
+          cat notes.md
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.build.outputs.version }}-build.${{ github.run_number }}
           target_commitish: ${{ github.sha }}
-          name: "Я-Зарядка AI, тестовая сборка ${{ github.run_number }}"
+          name: Я-Зарядка AI ${{ needs.build.outputs.version }} (сборка ${{ github.run_number }})
           prerelease: true
-          body: |
-            Тестовая сборка Android (ветка apk-build, коммит ${{ github.sha }}).
-            APK подписан отладочным ключом. При первом запуске зарядки нужен интернет для загрузки модели распознавания позы.
-          files: dist/*.apk
+          body_path: notes.md
+          files: |
+            dist/*.apk
+            dist/*.aab
+            dist/SHA256SUMS.txt
+            dist/signature.txt
+            dist/store/icon-512.png

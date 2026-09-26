@@ -1,0 +1,60 @@
+appId: com.yazaryadka.ai
+---
+- launchApp:
+    clearState: true
+    permissions:
+      all: allow
+- extendedWaitUntil:
+    visible: "Давай знакомиться!"
+    timeout: 60000
+- takeScreenshot: 01-onboarding
+- tapOn: "Например, Маша"
+- inputText: "Masha"
+- hideKeyboard
+- tapOn: "8"
+- tapOn:
+    text: "Я родитель.*"
+- tapOn: "НАЧАТЬ"
+- extendedWaitUntil:
+    visible: "Привет, Masha!"
+    timeout: 20000
+- takeScreenshot: 02-home
+- tapOn: "Вознаграждения"
+- takeScreenshot: 03-rewards
+- tapOn: "Добрые дела"
+- takeScreenshot: 04-deeds
+- tapOn: "Меню"
+- takeScreenshot: 05-menu
+- tapOn: "Родительский режим"
+- extendedWaitUntil:
+    visible: "Придумайте PIN-код из 4 цифр"
+    timeout: 15000
+- tapOn: "PIN"
+- inputText: "1234"
+- tapOn: "Повторите PIN"
+- inputText: "1234"
+- hideKeyboard
+- tapOn: "СОХРАНИТЬ PIN"
+- extendedWaitUntil:
+    visible: "Ждут подтверждения"
+    timeout: 30000
+- takeScreenshot: 06-parent
+- back
+- tapOn: "Главная"
+- tapOn: "НАЧАТЬ ЗАРЯДКУ"
+- tapOn:
+    text: "НАЧАТЬ"
+    index: 0
+- extendedWaitUntil:
+    notVisible: "Пико готовится.*"
+    timeout: 180000
+- takeScreenshot: 07-workout-started
+- assertNotVisible: "Не удалось.*"
+- extendedWaitUntil:
+    visible: "Не вижу тебя|Вижу тебя|Темно|Слишком близко|Слишком далеко|Несколько людей"
+    timeout: 60000
+- takeScreenshot: 08-workout-status
+- tapOn: "Завершить"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: 09-result
