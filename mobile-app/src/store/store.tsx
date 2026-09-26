@@ -29,10 +29,11 @@ export interface AppData {
   requests: RequestItem[];
   sessions: SessionRecord[];
   settings: Settings;
+  /** 'secure' when the PIN hash lives in SecureStore. Legacy builds stored a plaintext PIN here. */
   parentPin: string | null;
 }
 
-const KEY = 'ya-zaryadka-ai/state/v1';
+export const STORAGE_KEY = 'ya-zaryadka-ai/state/v1';
 export const WEEK = 7 * 24 * 3600 * 1000;
 
 export const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -92,6 +93,90 @@ export const initialData: AppData = {
   settings: DEFAULT_SETTINGS,
   parentPin: null,
 };
+
+// ---------- validation of stored data ----------
+
+const MAX = 10000000;
+const CATEGORIES: TaskCategory[] = ['deed', 'habit', 'study', 'creativity'];
+const STATUSES: Status[] = ['pending', 'approved', 'rejected'];
+const isObj = (v: any) => !!v && typeof v === 'object' && !Array.isArray(v);
+const num = (v: any, d: number, min: number, max: number) =>
+  typeof v === 'number' && Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : d;
+const str = (v: any, max: number) => (typeof v === 'string' ? v.slice(0, max) : '');
+const int = (v: any, d: number, min: number, max: number) => Math.round(num(v, d, min, max));
+
+/** Repairs data read from storage: wrong types, out-of-range numbers and broken lists. */
+export function sanitize(raw: any): AppData {
+  const s: any = isObj(raw) ? raw : {};
+  const set: any = isObj(s.settings) ? s.settings : {};
+  const settings: Settings = {
+    piggyPercent: int(set.piggyPercent, DEFAULT_SETTINGS.piggyPercent, 0, 50),
+    interestPercent: int(set.interestPercent, DEFAULT_SETTINGS.interestPercent, 0, 10),
+    exchangeRate: int(set.exchangeRate, DEFAULT_SETTINGS.exchangeRate, 1, 10),
+    hintIntervalSec: int(set.hintIntervalSec, DEFAULT_SETTINGS.hintIntervalSec, 4, 20),
+    showSkeleton: typeof set.showSkeleton === 'boolean' ? set.showSkeleton : true,
+    voice: typeof set.voice === 'boolean' ? set.voice : true,
+  };
+  const p: any = isObj(s.profile) ? s.profile : null;
+  const profile: Profile | null =
+    p && typeof p.name === 'string' && p.name.trim()
+      ? { name: p.name.trim().slice(0, 24), age: int(p.age, 8, 4, 16), consent: p.consent === true }
+      : null;
+  const now = Date.now();
+  const tasks: TaskItem[] = Array.isArray(s.tasks)
+    ? s.tasks
+        .filter((t: any) => isObj(t) && typeof t.id === 'string' && typeof t.title === 'string' && CATEGORIES.indexOf(t.category) >= 0)
+        .map((t: any) => ({ id: t.id, title: str(t.title, 60), category: t.category, hearts: int(t.hearts, 1, 1, 20) }))
+    : DEFAULT_TASKS;
+  const goals: Goal[] = Array.isArray(s.goals)
+    ? s.goals
+        .filter((g: any) => isObj(g) && typeof g.id === 'string' && typeof g.title === 'string')
+        .map((g: any) => ({ id: g.id, title: str(g.title, 40), price: int(g.price, 1, 1, 99999) }))
+    : DEFAULT_GOALS;
+  const taskLogs: TaskLog[] = Array.isArray(s.taskLogs)
+    ? s.taskLogs
+        .filter((l: any) => isObj(l) && typeof l.id === 'string' && typeof l.taskId === 'string' && STATUSES.indexOf(l.status) >= 0)
+        .slice(0, 500)
+        .map((l: any) => ({ id: l.id, taskId: l.taskId, title: str(l.title, 60), hearts: int(l.hearts, 0, 0, 100), at: num(l.at, 0, 0, now), day: str(l.day, 12), status: l.status }))
+    : [];
+  const requests: RequestItem[] = Array.isArray(s.requests)
+    ? s.requests
+        .filter((r: any) => isObj(r) && typeof r.id === 'string' && (r.kind === 'withdraw' || r.kind === 'reward') && STATUSES.indexOf(r.status) >= 0)
+        .slice(0, 300)
+        .map((r: any) => ({ id: r.id, kind: r.kind, amount: int(r.amount, 0, 0, MAX), goalId: typeof r.goalId === 'string' ? r.goalId : undefined, title: str(r.title, 60), at: num(r.at, 0, 0, now), status: r.status }))
+    : [];
+  const sessions: SessionRecord[] = Array.isArray(s.sessions)
+    ? s.sessions
+        .filter((x: any) => isObj(x) && typeof x.id === 'string')
+        .slice(0, 100)
+        .map((x: any) => ({ id: x.id, at: num(x.at, 0, 0, now), program: str(x.program, 60), reps: int(x.reps, 0, 0, 10000), accuracy: int(x.accuracy, 0, 0, 100), precision: int(x.precision, 0, 0, 100), consistency: int(x.consistency, 0, 0, 100), hearts: int(x.hearts, 0, 0, 100) }))
+    : [];
+  const ops: Op[] = Array.isArray(s.ops)
+    ? s.ops
+        .filter((o: any) => isObj(o) && typeof o.id === 'string')
+        .slice(0, 300)
+        .map((o: any) => ({ id: o.id, at: num(o.at, 0, 0, now), title: str(o.title, 80), hearts: int(o.hearts, 0, -MAX, MAX), lightning: int(o.lightning, 0, -MAX, MAX), piggy: int(o.piggy, 0, -MAX, MAX) }))
+    : [];
+  const selectedGoalId = typeof s.selectedGoalId === 'string' && goals.some((g) => g.id === s.selectedGoalId) ? s.selectedGoalId : null;
+  return {
+    version: 1,
+    profile,
+    hearts: int(s.hearts, 0, 0, MAX),
+    lightning: int(s.lightning, 0, 0, MAX),
+    piggy: int(s.piggy, 0, 0, MAX),
+    pendingInterest: int(s.pendingInterest, 0, 0, MAX),
+    lastInterestAt: num(s.lastInterestAt, 0, 0, now),
+    ops,
+    tasks,
+    taskLogs,
+    goals,
+    selectedGoalId,
+    requests,
+    sessions,
+    settings,
+    parentPin: typeof s.parentPin === 'string' ? s.parentPin.slice(0, 16) : null,
+  };
+}
 
 // ---------- economy (pure functions) ----------
 
@@ -208,13 +293,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    AsyncStorage.getItem(KEY)
+    AsyncStorage.getItem(STORAGE_KEY)
       .then((raw) => {
         if (raw) {
           try {
-            const parsed = JSON.parse(raw);
-            const merged: AppData = { ...initialData, ...parsed, settings: { ...DEFAULT_SETTINGS, ...(parsed.settings || {}) } };
-            setState(applyInterest(merged));
+            setState(applyInterest(sanitize(JSON.parse(raw))));
             return;
           } catch (e) {
             // corrupted storage: start fresh
@@ -228,7 +311,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!ready) return;
-    AsyncStorage.setItem(KEY, JSON.stringify(state)).catch(() => undefined);
+    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(state)).catch(() => undefined);
   }, [state, ready]);
 
   const update = useCallback((fn: (s: AppData) => AppData) => setState((s) => fn(s)), []);

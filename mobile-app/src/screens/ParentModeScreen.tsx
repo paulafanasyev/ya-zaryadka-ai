@@ -1,8 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, TextInput, Pressable, Switch, StyleSheet } from 'react-native';
+import { View, Text, TextInput, Pressable, Switch, StyleSheet, Alert, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen, Card, DarkButton, AccentButton, GhostButton, ui } from '../components/ui';
-import { useStore, decideTask, decideRequest, uid, AppData, TaskCategory } from '../store/store';
+import { useStore, decideTask, decideRequest, uid, AppData, TaskCategory, initialData } from '../store/store';
+import { hasPin, savePin, verifyPin, clearPinData } from '../security/pin';
+import { PRIVACY_URL } from '../config';
 import { C, heartsText, fmtDate } from '../theme';
 
 const LOCK_MS = 15 * 60 * 1000;
@@ -18,14 +20,14 @@ function Stepper({ label, value, suffix, onChange, min, max, step = 1 }: { label
   return (
     <View style={s.stepper}>
       <Text style={s.stepLabel}>{label}</Text>
-      <Pressable onPress={() => onChange(Math.max(min, value - step))} style={s.stepBtn}>
+      <Pressable onPress={() => onChange(Math.max(min, value - step))} style={s.stepBtn} accessibilityLabel={label + ': меньше'}>
         <Ionicons name="remove" size={20} color="#FFFFFF" />
       </Pressable>
       <Text style={s.stepValue}>
         {value}
         {suffix}
       </Text>
-      <Pressable onPress={() => onChange(Math.min(max, value + step))} style={s.stepBtn}>
+      <Pressable onPress={() => onChange(Math.min(max, value + step))} style={s.stepBtn} accessibilityLabel={label + ': больше'}>
         <Ionicons name="add" size={20} color="#FFFFFF" />
       </Pressable>
     </View>
@@ -34,6 +36,8 @@ function Stepper({ label, value, suffix, onChange, min, max, step = 1 }: { label
 
 export default function ParentModeScreen({ navigation }: any) {
   const { state, update } = useStore();
+  const [pinState, setPinState] = useState<'checking' | 'none' | 'set' | 'error'>('checking');
+  const [busy, setBusy] = useState(false);
   const [unlocked, setUnlocked] = useState(false);
   const [pin, setPin] = useState('');
   const [pin2, setPin2] = useState('');
@@ -45,6 +49,28 @@ export default function ParentModeScreen({ navigation }: any) {
   const [taskCat, setTaskCat] = useState<TaskCategory>('deed');
   const [taskHearts, setTaskHearts] = useState(3);
   const last = useRef(Date.now());
+
+  // Find the PIN in SecureStore. Migrate a plaintext PIN from older builds.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        let exists = await hasPin();
+        const legacy = state.parentPin;
+        if (!exists && legacy && /^\d{4}$/.test(legacy)) {
+          await savePin(legacy);
+          exists = true;
+        }
+        if (exists && legacy !== 'secure') update((st) => ({ ...st, parentPin: 'secure' }));
+        if (alive) setPinState(exists ? 'set' : 'none');
+      } catch (e) {
+        if (alive) setPinState('error');
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!unlocked) return;
@@ -63,41 +89,90 @@ export default function ParentModeScreen({ navigation }: any) {
   };
   const setSetting = (patch: any) => act((st) => ({ ...st, settings: { ...st.settings, ...patch } }));
 
+  const submit = async () => {
+    if (busy) return;
+    if (pin.length !== 4) {
+      setError('Нужно 4 цифры.');
+      return;
+    }
+    setBusy(true);
+    try {
+      if (pinState === 'none') {
+        if (pin !== pin2) {
+          setError('PIN-коды не совпадают.');
+          return;
+        }
+        await savePin(pin);
+        update((st) => ({ ...st, parentPin: 'secure' }));
+        setPinState('set');
+      } else {
+        const r = await verifyPin(pin);
+        if (!r.ok) {
+          setPin('');
+          if (r.lockedMs > 0) setError('Слишком много попыток. Попробуйте через ' + Math.ceil(r.lockedMs / 1000) + ' с.');
+          else setError('Неверный PIN-код. Осталось попыток: ' + r.left + '.');
+          return;
+        }
+      }
+      setError('');
+      setPin('');
+      setPin2('');
+      last.current = Date.now();
+      setUnlocked(true);
+    } catch (e) {
+      setError('Не удалось проверить PIN-код. Попробуйте ещё раз.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const confirmWipe = () => {
+    last.current = Date.now();
+    Alert.alert(
+      'Удалить все данные?',
+      'Имя, возраст, Сердца, задания, история зарядок и PIN-код будут удалены с этого телефона. Это нельзя отменить.',
+      [
+        { text: 'Отмена', style: 'cancel' },
+        {
+          text: 'Удалить',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await clearPinData();
+            } catch (e) {
+              // nothing to delete
+            }
+            update(() => ({ ...initialData, lastInterestAt: Date.now() }));
+          },
+        },
+      ]
+    );
+  };
+
   if (!unlocked) {
-    const creating = !state.parentPin;
+    const creating = pinState === 'none';
     return (
       <Screen title="Родительский режим" onBack={() => navigation.goBack()}>
         <Card>
-          <Text style={ui.cardTitle}>{creating ? 'Придумайте PIN-код из 4 цифр' : 'Введите PIN-код'}</Text>
-          <TextInput value={pin} onChangeText={(t) => setPin(t.replace(/[^0-9]/g, ''))} keyboardType="number-pad" secureTextEntry maxLength={4} style={[ui.input, { marginTop: 12 }]} placeholder="PIN" />
-          {creating ? (
-            <TextInput value={pin2} onChangeText={(t) => setPin2(t.replace(/[^0-9]/g, ''))} keyboardType="number-pad" secureTextEntry maxLength={4} style={ui.input} placeholder="Повторите PIN" />
+          {pinState === 'checking' ? <Text style={ui.muted}>Проверяем защиту...</Text> : null}
+          {pinState === 'error' ? (
+            <Text style={ui.error}>Не удалось открыть защищённое хранилище телефона. Перезапустите приложение.</Text>
           ) : null}
-          {error ? <Text style={ui.error}>{error}</Text> : null}
-          <DarkButton
-            title={creating ? 'СОХРАНИТЬ PIN' : 'ВОЙТИ'}
-            onPress={() => {
-              if (pin.length !== 4) {
-                setError('Нужно 4 цифры.');
-                return;
-              }
-              if (creating) {
-                if (pin !== pin2) {
-                  setError('PIN-коды не совпадают.');
-                  return;
-                }
-                update((st) => ({ ...st, parentPin: pin }));
-              } else if (pin !== state.parentPin) {
-                setError('Неверный PIN-код.');
-                return;
-              }
-              setError('');
-              setPin2('');
-              last.current = Date.now();
-              setUnlocked(true);
-            }}
-          />
-          <Text style={ui.muted}>Режим закрывается сам через 15 минут без действий.</Text>
+          {pinState === 'none' || pinState === 'set' ? (
+            <>
+              <Text style={ui.cardTitle}>{creating ? 'Придумайте PIN-код из 4 цифр' : 'Введите PIN-код'}</Text>
+              <TextInput value={pin} onChangeText={(t) => setPin(t.replace(/[^0-9]/g, ''))} keyboardType="number-pad" secureTextEntry maxLength={4} style={[ui.input, { marginTop: 12 }]} placeholder="PIN" />
+              {creating ? (
+                <TextInput value={pin2} onChangeText={(t) => setPin2(t.replace(/[^0-9]/g, ''))} keyboardType="number-pad" secureTextEntry maxLength={4} style={ui.input} placeholder="Повторите PIN" />
+              ) : null}
+              {error ? <Text style={ui.error}>{error}</Text> : null}
+              <DarkButton title={busy ? 'ПРОВЕРЯЕМ...' : creating ? 'СОХРАНИТЬ PIN' : 'ВОЙТИ'} disabled={busy} onPress={submit} />
+              <Text style={ui.muted}>Режим закрывается сам через 15 минут без действий. После 5 неверных попыток вход временно блокируется.</Text>
+              {!creating ? (
+                <Text style={ui.muted}>Забыли PIN? Очистите данные приложения в настройках Android. Все данные ребёнка при этом удалятся.</Text>
+              ) : null}
+            </>
+          ) : null}
         </Card>
       </Screen>
     );
@@ -172,7 +247,7 @@ export default function ParentModeScreen({ navigation }: any) {
             <Text style={s.stepLabel}>
               {g.title} · {heartsText(g.price)}
             </Text>
-            <Pressable onPress={() => act((st) => ({ ...st, goals: st.goals.filter((x) => x.id !== g.id), selectedGoalId: st.selectedGoalId === g.id ? null : st.selectedGoalId }))}>
+            <Pressable accessibilityLabel={'Удалить цель ' + g.title} onPress={() => act((st) => ({ ...st, goals: st.goals.filter((x) => x.id !== g.id), selectedGoalId: st.selectedGoalId === g.id ? null : st.selectedGoalId }))}>
               <Ionicons name="trash-outline" size={22} color={C.danger} />
             </Pressable>
           </View>
@@ -184,7 +259,7 @@ export default function ParentModeScreen({ navigation }: any) {
           title="ДОБАВИТЬ ЦЕЛЬ"
           disabled={!goalTitle.trim() || !Number(goalPrice)}
           onPress={() => {
-            const g = { id: uid(), title: goalTitle.trim(), price: Number(goalPrice) };
+            const g = { id: uid(), title: goalTitle.trim().slice(0, 40), price: Math.min(99999, Number(goalPrice)) };
             act((st) => ({ ...st, goals: st.goals.concat([g]) }));
             setGoalTitle('');
             setGoalPrice('');
@@ -208,7 +283,7 @@ export default function ParentModeScreen({ navigation }: any) {
           title="ДОБАВИТЬ ЗАДАНИЕ"
           disabled={!taskTitle.trim()}
           onPress={() => {
-            const t = { id: uid(), title: taskTitle.trim(), category: taskCat, hearts: taskHearts };
+            const t = { id: uid(), title: taskTitle.trim().slice(0, 60), category: taskCat, hearts: taskHearts };
             act((st) => ({ ...st, tasks: st.tasks.concat([t]) }));
             setTaskTitle('');
           }}
@@ -228,6 +303,13 @@ export default function ParentModeScreen({ navigation }: any) {
           </Text>
         </Card>
       ))}
+
+      <Text style={ui.section}>Данные и приватность</Text>
+      <Card>
+        <Text style={ui.muted}>Все данные хранятся только на этом телефоне. Видео с камеры не записывается и не отправляется.</Text>
+        <GhostButton small title="ПОЛИТИКА КОНФИДЕНЦИАЛЬНОСТИ" onPress={() => Linking.openURL(PRIVACY_URL).catch(() => undefined)} style={{ marginTop: 10 }} />
+        <DarkButton small title="УДАЛИТЬ ВСЕ ДАННЫЕ" onPress={confirmWipe} style={{ marginTop: 10 }} />
+      </Card>
     </Screen>
   );
 }

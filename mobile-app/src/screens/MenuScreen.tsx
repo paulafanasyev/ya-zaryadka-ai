@@ -1,7 +1,8 @@
 import React from 'react';
-import { View, Text, StyleSheet, Pressable, Share } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Share, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen, Card, ui } from '../components/ui';
+import { PRIVACY_URL, SUPPORT_EMAIL } from '../config';
 import { C } from '../theme';
 
 interface Item { icon: any; title: string; onPress?: () => void; soon?: boolean; }
@@ -22,6 +23,7 @@ export default function MenuScreen({ navigation }: any) {
   const share = () => {
     Share.share({ message: 'Я-Зарядка AI: утренняя зарядка с роботом-тренером Пико. Заряди себя, семью, страну!' }).catch(() => undefined);
   };
+  const open = (url: string) => Linking.openURL(url).catch(() => undefined);
   const main: Item[] = [
     { icon: 'wallet-outline', title: 'Баланс', onPress: () => navigation.navigate('Balance') },
     { icon: 'person-outline', title: 'Профиль', onPress: () => navigation.navigate('Profile') },
@@ -29,7 +31,8 @@ export default function MenuScreen({ navigation }: any) {
     { icon: 'settings-outline', title: 'Настройки', onPress: () => navigation.navigate('Settings') },
     { icon: 'share-social-outline', title: 'Поделиться', onPress: share },
     { icon: 'qr-code-outline', title: 'Показать QR код', soon: true },
-    { icon: 'help-buoy-outline', title: 'Поддержка', soon: true },
+    { icon: 'help-buoy-outline', title: 'Поддержка', onPress: () => open('mailto:' + SUPPORT_EMAIL) },
+    { icon: 'shield-checkmark-outline', title: 'Политика конфиденциальности', onPress: () => open(PRIVACY_URL) },
     { icon: 'apps-outline', title: 'О приложении', onPress: () => navigation.navigate('About') },
   ];
   const extra: Item[] = [

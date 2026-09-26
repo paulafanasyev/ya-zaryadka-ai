@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput, Pressable, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GreenBackground, Pico, Bubble, Card, DarkButton, ui } from '../components/ui';
 import { useStore } from '../store/store';
+import { PRIVACY_URL, TERMS_URL } from '../config';
 import { C } from '../theme';
 
 const AGES = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
@@ -15,6 +16,7 @@ export default function OnboardingScreen() {
   const [age, setAge] = useState<number | null>(null);
   const [consent, setConsent] = useState(false);
   const ok = name.trim().length > 0 && age !== null && consent;
+  const open = (url: string) => Linking.openURL(url).catch(() => undefined);
 
   return (
     <GreenBackground>
@@ -26,7 +28,7 @@ export default function OnboardingScreen() {
         </View>
         <Card>
           <Text style={ui.label}>Имя ребёнка</Text>
-          <TextInput value={name} onChangeText={setName} placeholder="Например, Маша" style={ui.input} maxLength={24} />
+          <TextInput value={name} onChangeText={(t) => setName(t.replace(/[<>{}]/g, ''))} placeholder="Например, Маша" style={ui.input} maxLength={24} autoCorrect={false} />
           <Text style={[ui.label, { marginTop: 8 }]}>Возраст</Text>
           <View style={s.ages}>
             {AGES.map((a) => (
@@ -35,16 +37,21 @@ export default function OnboardingScreen() {
               </Pressable>
             ))}
           </View>
-          <Pressable onPress={() => setConsent(!consent)} style={s.consent}>
+          <Pressable onPress={() => setConsent(!consent)} style={s.consent} accessibilityRole="checkbox" accessibilityState={{ checked: consent }}>
             <Ionicons name={consent ? 'checkbox' : 'square-outline'} size={26} color={C.accent} />
             <Text style={s.consentText}>
-              Я родитель. Разрешаю использовать камеру во время зарядки. Видео обрабатывается только на телефоне, не записывается и никуда не отправляется.
+              Я родитель или законный представитель ребёнка. Разрешаю использовать камеру во время зарядки и хранить имя и возраст на этом телефоне. Видео обрабатывается только на телефоне, не записывается и никуда не отправляется.
             </Text>
           </Pressable>
+          <Text style={s.links}>
+            <Text style={s.link} onPress={() => open(PRIVACY_URL)}>Политика конфиденциальности</Text>
+            {'   '}
+            <Text style={s.link} onPress={() => open(TERMS_URL)}>Условия использования</Text>
+          </Text>
           <DarkButton
             title="НАЧАТЬ"
             disabled={!ok}
-            onPress={() => update((st) => ({ ...st, profile: { name: name.trim(), age: age as number, consent: true } }))}
+            onPress={() => update((st) => ({ ...st, profile: { name: name.trim().slice(0, 24), age: age as number, consent: true } }))}
           />
         </Card>
       </ScrollView>
@@ -61,4 +68,6 @@ const s = StyleSheet.create({
   ageText: { fontSize: 16, fontWeight: '800', color: C.charcoal },
   consent: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginVertical: 12 },
   consentText: { flex: 1, fontSize: 14, color: C.charcoal, lineHeight: 20 },
+  links: { fontSize: 13, marginBottom: 12 },
+  link: { color: C.accent, fontWeight: '700', textDecorationLine: 'underline' },
 });
